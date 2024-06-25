@@ -1,0 +1,30 @@
+[project]
+authors = [{ name = "Tony Wu", email = "tonywu6@protonmail.com" }]
+dependencies = [
+    "pydantic>=2.7.4",
+    "openai>=1.35.3",
+    "termcolor>=2.4.0",
+    "babel>=2.15.0",
+    "click>=8.1.7",
+    "more-itertools>=10.3.0",
+    "tqdm>=4.66.4",
+]
+description = "Add your description here"
+name = "g-po-t"
+readme = "README.md"
+requires-python = ">= 3.8"
+version = "0.1.0"
+
+[build-system]
+build-backend = "hatchling.build"
+requires = ["hatchling"]
+
+[tool.rye]
+dev-dependencies = []
+managed = true
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/g_po_t"]
