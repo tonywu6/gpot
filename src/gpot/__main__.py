@@ -17,7 +17,6 @@ from pydantic import BaseModel
 from termcolor import colored
 from tqdm import tqdm
 
-client = OpenAI()
 
 
 @click.command()
@@ -92,32 +91,30 @@ def main(
 
     def condition(t: Translatable) -> bool:
         if fuzzy_only:
-            return t.message.fuzzy
+            return t.message.fuzzy or not t.message.string
         else:
             return True
 
-    with suppress(KeyboardInterrupt):
+    for batch in chunked(filter(condition, translatables), batch_size):
+        messages: dict[str, tuple[str, str]] = {}
+        sources: dict[str, list[Translatable]] = defaultdict(list)
 
-        for batch in chunked(filter(condition, translatables), batch_size):
-            messages: dict[str, tuple[str, str]] = {}
-            sources: dict[str, list[Translatable]] = defaultdict(list)
+        for trans in batch:
+            for key, source, target in trans:
+                messages[key] = (source, target)
+                sources[key].append(trans)
 
-            for trans in batch:
-                for key, source, target in trans:
-                    messages[key] = (source, target)
-                    sources[key].append(trans)
+        translator = Translator(
+            messages,
+            locales,
+            knownledge=knowledge,
+            model=model,
+            max_retries=max_retries,
+        )
 
-            translator = Translator(
-                messages,
-                locales,
-                knownledge=knowledge,
-                model=model,
-                max_retries=max_retries,
-            )
-
-            for key, value in translator.translate():
-                for origin in sources.get(key, []):
-                    origin[key] = value
+        for key, value in translator.translate():
+            for origin in sources.get(key, []):
+                origin[key] = value
 
     for trans in translatables:
         trans.finalize()
@@ -153,11 +150,12 @@ class Translator:
         self.model = model
         self.max_retries = max_retries
         self.stderr = stderr
+        self.client = OpenAI()
 
     def translate(self) -> Iterable[tuple[str, str]]:
         self.retries.clear()
 
-        stream = client.chat.completions.create(
+        stream = self.client.chat.completions.create(
             messages=self.create_prompt(),
             model=self.model,
             temperature=0.2,
@@ -297,7 +295,7 @@ class Translator:
                         " The translation MUST NOT contain any newlines.",
                         " The translation MAY be empty.",
                         "",
-                        "If an existing translation exists, you MUST correct it.",
+                        "If an existing translation exists, you MUST correct it, including content and formatting.",
                         " You MUST remove any extraneous information not present in the source text",
                         " from an existing translation.",
                         "",
@@ -383,6 +381,7 @@ class Translatable:
         self.message = message
 
         self.chunks: list[tuple[str, str, str]] = []
+        self.updated = False
 
         if not isinstance(message.id, str):
             raise ValueError(f"Unsuported message id: {message.id}")
@@ -410,16 +409,17 @@ class Translatable:
     def __setitem__(self, key, value):
         for idx, (k, source, target) in enumerate(self.chunks):
             if k == key:
+                self.updated = True
                 self.chunks[idx] = (k, source, value)
                 return
         raise KeyError(key)
 
     def finalize(self):
+        if not self.updated:
+            return
         result = "\n".join([v for _, _, v in self.chunks])
-        if result == self.message.id:
-            self.message.string = None
-        else:
-            self.message.string = result
+        self.message.string = result
+        self.message.flags.discard("fuzzy")
 
 
 def stream_content(stream: Stream[ChatCompletionChunk]) -> Iterable[str]:
