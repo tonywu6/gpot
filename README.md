@@ -1,3 +1,3 @@
-# g-po-t
+# gpot
 
-Describe your project here.
+Translate .po files using GPT.

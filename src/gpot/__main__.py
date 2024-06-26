@@ -18,7 +18,6 @@ from termcolor import colored
 from tqdm import tqdm
 
 
-
 @click.command()
 @click.option(
     "--model",
