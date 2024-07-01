@@ -1,6 +1,5 @@
 import sys
 from collections import defaultdict
-from contextlib import suppress
 from hashlib import sha256
 from io import BytesIO
 from typing import Iterable, Optional, TextIO
@@ -90,7 +89,11 @@ def main(
 
     def condition(t: Translatable) -> bool:
         if fuzzy_only:
-            return t.message.fuzzy or not t.message.string
+            return (
+                t.message.fuzzy
+                or not t.message.string
+                or t.message.id == t.message.string
+            )
         else:
             return True
 
@@ -119,7 +122,7 @@ def main(
         trans.finalize()
 
     buf = BytesIO()
-    write_po(buf, catalog)
+    write_po(buf, catalog, width=0)
 
     if inplace:
         with open(po_file, "wb") as f:
@@ -225,7 +228,6 @@ class Translator:
         with tqdm(bar_format="{desc}", file=self.stderr, leave=False) as pbar:
             for chunk in stream_content(stream):
                 for idx, text in enumerate(chunk.split("\n")):
-
                     if idx == 0:
                         incomplete_line += text
                         pbar.set_description(colored(incomplete_line, "grey"))
